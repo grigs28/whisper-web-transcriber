@@ -36,7 +36,7 @@ class Config:
     
     @property
     def PORT(self) -> int:
-        return int(os.getenv('PORT', 5000))
+        return int(os.getenv('PORT', 5551))
     
     # File Management
     @property
