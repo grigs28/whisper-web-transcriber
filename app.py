@@ -14,20 +14,21 @@ import time
 from pathlib import Path
 from flask_socketio import SocketIO, emit
 import gc
+from config import config
 
 # ==============================
 # 应用程序配置和初始化
 # ==============================
 
-# 配置参数
-UPLOAD_FOLDER = 'uploads'
-OUTPUT_FOLDER = 'outputs'
+# 从配置模块获取配置参数
+UPLOAD_FOLDER = config.UPLOAD_FOLDER
+OUTPUT_FOLDER = config.OUTPUT_FOLDER
 LOG_FOLDER = 'logs'
-ALLOWED_EXTENSIONS = {'mp3', 'mp4', 'wav', 'opus', 'flac', 'm4a', 'webm', 'ogg'}
-MAX_FILE_AGE = 30
-MODEL_BASE_PATH = '/opt/models/openai'  # 模型基础路径
-MAX_LOG_SIZE = 200 * 1024 * 1024  # 200MB
-BACKUP_COUNT = 5  # 保留5个备份日志文件
+ALLOWED_EXTENSIONS = set(config.ALLOWED_EXTENSIONS)
+MAX_FILE_AGE = config.MAX_FILE_AGE
+MODEL_BASE_PATH = config.MODEL_BASE_PATH
+MAX_LOG_SIZE = config.MAX_LOG_SIZE
+BACKUP_COUNT = config.LOG_BACKUP_COUNT
 
 # 创建必要的文件夹
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -37,13 +38,17 @@ os.makedirs(MODEL_BASE_PATH, exist_ok=True)
 
 # 初始化Flask Web应用程序
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'
+app.secret_key = config.SECRET_KEY
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 
 # 初始化SocketIO
-socketio = SocketIO(app, async_mode='threading', cors_allowed_origins="*")
+socketio = SocketIO(app, 
+                   async_mode='threading', 
+                   cors_allowed_origins="*",
+                   ping_timeout=config.WEBSOCKET_PING_TIMEOUT,
+                   ping_interval=config.WEBSOCKET_PING_INTERVAL)
 
 # 配置日志系统
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -124,8 +129,10 @@ def get_available_gpus():
 
 # 设置默认GPU ID
 available_gpus = get_available_gpus()
-if available_gpus:
-    DEFAULT_GPU_ID = [0]
+if available_gpus and config.DEFAULT_GPU_IDS:
+    # 验证配置的GPU ID是否可用
+    valid_gpu_ids = [gpu_id for gpu_id in config.DEFAULT_GPU_IDS if gpu_id < len(available_gpus)]
+    DEFAULT_GPU_ID = valid_gpu_ids if valid_gpu_ids else [0]
     log_message('info', f"设置默认GPU为: {DEFAULT_GPU_ID}")
 else:
     DEFAULT_GPU_ID = []
@@ -634,9 +641,7 @@ def index():
     gpus = get_available_gpus()
     
     # 获取可用模型
-    whisper_models = [
-        'tiny', 'base', 'small', 'medium', 'large', 'large-v2', 'large-v3'
-    ]
+    whisper_models = config.SUPPORTED_MODELS
     
     # 获取可用语言
     languages = [
@@ -1133,5 +1138,5 @@ if __name__ == '__main__':
         log_message('info', "转录工作线程已启动")
     
     # 启动Flask应用
-    log_message('info', f"服务器启动，监听 0.0.0.0:5551")
-    socketio.run(app, host='0.0.0.0', port=5551, debug=True)
+    log_message('info', f"服务器启动，监听 {config.HOST}:{config.PORT}")
+    socketio.run(app, host=config.HOST, port=config.PORT, debug=config.DEBUG)

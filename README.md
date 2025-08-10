@@ -70,14 +70,29 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 4. 安装Whisper模型
+### 4. 配置应用
+复制配置模板并根据需要修改：
+```bash
+cp .env.sample .env
+```
+
+编辑 `.env` 文件配置应用参数（详见配置说明部分）：
+```bash
+# Windows: notepad .env
+# Linux/Mac: nano .env 或 vim .env
+```
+
+### 5. 安装Whisper模型
 首次运行前需要下载Whisper模型：
 ```bash
-# 模型会自动下载，或者手动下载到指定目录
+# 下载所需的模型（例如：large-v3）
+python -c "import whisper; whisper.load_model('large-v3')"
+
+# 或者让模型自动下载到指定目录
 mkdir -p /opt/models/openai/
 ```
 
-### 5. 运行应用
+### 6. 运行应用
 ```bash
 python app.py
 ```
@@ -172,8 +187,12 @@ socket.on('system_message', (data) => { /* 系统消息 */ });
 ```
 whisper/
 ├── app.py                    # 主应用程序文件
+├── config.py                 # 配置管理模块
+├── .env.sample              # 配置模板文件
+├── .env                     # 实际配置文件（需要创建）
 ├── requirements.txt          # Python依赖包列表
 ├── README.md                # 项目说明文档
+├── .gitignore               # Git忽略文件列表
 ├── templates/
 │   └── index.html           # Web界面HTML模板
 ├── static/                  # 静态资源文件
@@ -191,16 +210,167 @@ whisper/
 ├── uploads/                 # 上传的音频文件存储
 ├── outputs/                 # 转录结果文件存储
 ├── logs/                    # 应用日志文件
-│   └── transcription.log   # 转录日志
+│   └── app.log             # 应用日志（可配置）
 ├── venv/                    # Python虚拟环境 (可选)
-└── /opt/models/openai/      # Whisper模型文件存储
+└── /opt/models/openai/      # Whisper模型文件存储（可配置）
 ```
 
-## 环境变量
+### 📁 重要文件说明
 
-建议设置以下环境变量：
-- `FLASK_ENV`: development 或 production
-- `SECRET_KEY`: 应用程序密钥
+- **`config.py`**: 核心配置管理模块，负责加载环境变量、类型转换和配置验证
+- **`.env.sample`**: 配置模板，包含所有可配置项的默认值和说明
+- **`.env`**: 实际使用的配置文件，基于 `.env.sample` 创建并根据需要修改
+- **`.gitignore`**: 确保敏感配置文件（如 `.env`）不被提交到版本控制
+
+## 配置管理
+
+### 📋 配置文件说明
+
+本项目采用现代化的配置管理系统，支持环境变量配置和默认值管理：
+
+- **`.env.sample`**: 配置模板文件，包含所有可配置项和说明
+- **`.env`**: 实际配置文件，基于模板创建并根据需要修改
+- **`config.py`**: 配置管理模块，负责加载和验证配置
+
+### 🔧 配置步骤
+
+1. **复制配置模板**：
+```bash
+cp .env.sample .env
+```
+
+2. **编辑配置文件**：
+根据实际环境修改 `.env` 文件中的配置项。
+
+### ⚙️ 主要配置项
+
+#### 🖥️ 服务器配置
+```env
+# 应用密钥（生产环境请修改）
+SECRET_KEY=your-secret-key-here
+
+# 调试模式
+DEBUG=False
+
+# 监听地址和端口
+HOST=0.0.0.0
+PORT=5000
+```
+
+#### 📁 文件管理
+```env
+# 文件保存天数
+MAX_FILE_AGE=30
+
+# 最大文件大小（MB）
+MAX_CONTENT_LENGTH=500
+
+# 上传和输出目录
+UPLOAD_FOLDER=uploads
+OUTPUT_FOLDER=outputs
+```
+
+#### 🤖 模型配置
+```env
+# 模型存储路径
+MODEL_BASE_PATH=/opt/models/openai
+
+# 默认模型
+DEFAULT_MODEL=large-v3
+
+# 支持的模型列表（逗号分隔）
+SUPPORTED_MODELS=tiny,base,small,medium,large,large-v2,large-v3
+```
+
+#### 🎮 GPU配置
+```env
+# 默认GPU ID（逗号分隔，0表示第一个GPU）
+DEFAULT_GPU_IDS=0
+
+# 最大GPU内存使用率
+MAX_GPU_MEMORY=0.8
+```
+
+#### 🎵 转录设置
+```env
+# 默认语言（auto为自动检测）
+DEFAULT_LANGUAGE=auto
+
+# 最大并发转录数
+MAX_CONCURRENT_TRANSCRIPTIONS=3
+
+# 转录超时时间（秒）
+TRANSCRIPTION_TIMEOUT=3600
+```
+
+#### 📝 日志配置
+```env
+# 日志级别
+LOG_LEVEL=INFO
+
+# 日志文件路径
+LOG_FILE=logs/app.log
+
+# 最大日志文件大小（字节）
+MAX_LOG_SIZE=10485760
+
+# 日志备份数量
+LOG_BACKUP_COUNT=5
+```
+
+#### 🔌 WebSocket配置
+```env
+# WebSocket ping超时时间（秒）
+WEBSOCKET_PING_TIMEOUT=60
+
+# WebSocket ping间隔（秒）
+WEBSOCKET_PING_INTERVAL=25
+```
+
+#### 🔒 安全配置
+```env
+# 允许的文件扩展名（逗号分隔）
+ALLOWED_EXTENSIONS=wav,mp3,mp4,avi,mov,m4a,flac,ogg,wma,aac
+
+# 最大文件名长度
+MAX_FILENAME_LENGTH=255
+```
+
+#### ⚡ 性能配置
+```env
+# 工作线程数
+WORKER_THREADS=4
+
+# 清理间隔（秒）
+CLEANUP_INTERVAL=3600
+
+# 内存清理阈值
+MEMORY_CLEANUP_THRESHOLD=0.9
+```
+
+### 🛠️ 配置验证
+
+应用启动时会自动验证配置的有效性：
+- 端口号范围检查（1-65535）
+- 文件大小和保存天数验证
+- 模型列表和默认模型检查
+- GPU内存使用率范围验证
+
+### 💡 配置最佳实践
+
+1. **生产环境**：
+   - 修改 `SECRET_KEY` 为随机字符串
+   - 设置 `DEBUG=False`
+   - 根据服务器性能调整并发数和内存阈值
+
+2. **开发环境**：
+   - 可以设置 `DEBUG=True` 启用调试模式
+   - 使用较小的模型（如 `base`）加快测试速度
+
+3. **资源受限环境**：
+   - 减少 `MAX_CONCURRENT_TRANSCRIPTIONS`
+   - 降低 `MAX_GPU_MEMORY` 使用率
+   - 选择较小的模型
 
 ## 注意事项
 

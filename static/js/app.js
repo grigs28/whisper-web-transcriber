@@ -1,7 +1,14 @@
 // ==============================
 // 初始化WebSocket连接
 // ==============================
-const socket = io('/status', { transports: ['websocket'] });
+const socket = io('/status', { 
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 5,
+    timeout: 20000
+});
 
 // 转录状态变量
 let taskStatus = {};
@@ -17,6 +24,33 @@ let isTranscribing = false; // 是否正在转录
 // 连接到WebSocket服务器
 socket.on('connect', () => {
     addStatusLog('已连接到服务器', 'info');
+    // 恢复状态
+    checkTranscriptionStatus();
+});
+
+// 断开连接处理
+socket.on('disconnect', (reason) => {
+    addStatusLog(`与服务器断开连接: ${reason}`, 'warning');
+});
+
+// 重连尝试
+socket.on('reconnect_attempt', (attemptNumber) => {
+    addStatusLog(`正在尝试重连... (${attemptNumber}/5)`, 'info');
+});
+
+// 重连成功
+socket.on('reconnect', (attemptNumber) => {
+    addStatusLog(`重连成功 (尝试次数: ${attemptNumber})`, 'success');
+});
+
+// 重连失败
+socket.on('reconnect_failed', () => {
+    addStatusLog('重连失败，请刷新页面', 'error');
+});
+
+// 连接错误
+socket.on('connect_error', (error) => {
+    addStatusLog(`连接错误: ${error.message}`, 'error');
 });
 
 // 接收日志消息
