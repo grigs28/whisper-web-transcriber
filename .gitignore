@@ -42,12 +42,8 @@ logs/*
 screenshots/*.png
 screenshots/*.jpg
 screenshots/*.jpeg
-demo/*.gif
-demo/*.mp4
-demo/*.mov
 # 但保留说明文件
 !screenshots/README.md
-!demo/README.md
 
 # IDE和编辑器
 .vscode/

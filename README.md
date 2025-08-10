@@ -20,8 +20,8 @@
 - ✅ **任务控制** - 支持单个或批量停止正在进行的转录任务
 
 ### 🔧 系统功能
-- ✅ **文件管理** - 支持文件预览、下载和删除
-- ✅ **自动清理** - 超过30天的文件自动删除（可配置）
+- ✅ **文件管理** - 支持文件预览、下载和删除，文件列表采用等高布局设计
+- ✅ **手动文件管理** - 支持单个和批量文件删除操作
 - ✅ **日志系统** - 完整的日志记录和轮转机制
 - ✅ **API支持** - 提供完整的RESTful API接口
 - ✅ **错误处理** - 完善的错误处理和用户反馈机制
@@ -31,32 +31,6 @@
 ### 主界面
 ![主界面](./screenshots/main-interface.png)
 *现代化的Web界面，支持拖拽上传和实时状态显示*
-
-### 上传界面
-![上传界面](./screenshots/upload-interface.png)
-*支持多文件拖拽上传，实时显示上传进度*
-
-### 队列管理
-![队列管理](./screenshots/queue-management.png)
-*实时任务队列，显示转录进度和状态*
-
-### 转录结果
-![转录结果](./screenshots/transcription-results.png)
-*转录完成后的结果展示和文件管理*
-
-## 🎬 功能演示
-
-### 拖拽上传演示
-![拖拽上传](./demo/drag-upload.gif)
-*演示拖拽文件到上传区域的交互效果*
-
-### 实时转录演示
-![实时转录](./demo/real-time-transcription.gif)
-*展示实时转录进度和WebSocket状态更新*
-
-### 队列管理演示
-![队列管理](./demo/queue-management.gif)
-*演示任务队列的管理和批量操作功能*
 
 ## 系统要求
 
@@ -79,8 +53,8 @@
 
 ### 1. 克隆仓库
 ```bash
-git clone <repository-url>
-cd whisper
+git clone https://github.com/grigs28/whisper-web-transcriber.git
+cd whisper-web-transcriber
 ```
 
 ### 2. 创建虚拟环境
@@ -206,12 +180,14 @@ whisper/
 │   ├── css/                # 样式文件
 │   │   ├── bootstrap.min.css
 │   │   ├── fontawesome.min.css
-│   │   └── style.css       # 自定义样式
+│   │   ├── index.css       # 主要自定义样式（包含布局优化）
+│   │   └── style.css       # 额外样式文件
 │   ├── js/                 # JavaScript文件
 │   │   ├── app.js          # 主要前端逻辑
 │   │   ├── bootstrap.bundle.min.js
 │   │   └── socket.io.min.js # WebSocket客户端
 │   └── webfonts/           # 字体文件
+├── screenshots/             # 界面截图文件
 ├── uploads/                 # 上传的音频文件存储
 ├── outputs/                 # 转录结果文件存储
 ├── logs/                    # 应用日志文件
@@ -230,7 +206,7 @@ whisper/
 
 ### ⚠️ 重要提醒
 1. **首次运行**: 系统会自动下载Whisper模型，需要稳定的网络连接
-2. **文件清理**: 系统会自动清理超过30天的文件（可在代码中配置）
+2. **文件管理**: 系统提供手动文件管理功能，支持单个和批量删除操作
 3. **内存使用**: 大模型(large)需要更多内存，建议根据硬件选择合适的模型
 4. **并发限制**: 系统支持队列管理，避免同时运行过多任务导致内存不足
 
@@ -289,6 +265,7 @@ whisper/
 - **任务控制**: 开始、停止、批量操作
 - **WebSocket通信**: 实时状态更新
 - **UI交互**: 动态界面更新和用户反馈
+- **布局优化**: 等高文件列表和统一间距响应式设计
 
 ### 🔧 关键特性实现
 
