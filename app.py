@@ -1150,11 +1150,18 @@ def cleanup_resources():
     try:
         log_message('info', "开始清理资源...")
         
+        # 设置全局停止标志（如果存在的话）
+        global active_transcriptions
+        
         # 停止所有活动的转录任务
         for task_id in list(active_transcriptions.keys()):
             try:
                 task_info = active_transcriptions[task_id]
                 gpu_ids = task_info.get('gpu_ids', [])
+                
+                # 设置任务停止标志
+                if 'stop_flag' in task_info:
+                    task_info['stop_flag'] = True
                 
                 # 释放GPU内存
                 if gpu_ids:
@@ -1165,6 +1172,11 @@ def cleanup_resources():
                 del active_transcriptions[task_id]
             except Exception as e:
                 log_message('warning', f"清理任务 {task_id} 时出错: {e}")
+        
+        # 清理转录队列
+        global transcription_queue
+        with queue_lock:
+            transcription_queue.clear()
         
         # 清理全局模型缓存
         global models
@@ -1181,6 +1193,9 @@ def cleanup_resources():
                     torch.cuda.synchronize()
             log_message('info', "所有GPU显存已清空")
         
+        # 等待一小段时间让清理完成
+        time.sleep(0.5)
+        
         log_message('info', "资源清理完成")
         
     except Exception as e:
@@ -1192,8 +1207,21 @@ def signal_handler(signum, frame):
     """
     log_message('info', f"接收到信号 {signum}，正在安全退出...")
     cleanup_resources()
+    
+    # 优雅地关闭SocketIO和Flask应用
+    try:
+        # 停止SocketIO服务器
+        if hasattr(socketio, 'stop'):
+            socketio.stop()
+        log_message('info', "SocketIO服务器已停止")
+    except Exception as e:
+        log_message('warning', f"停止SocketIO服务器时出错: {e}")
+    
     log_message('info', "程序已安全退出")
-    sys.exit(0)
+    
+    # 使用os._exit而不是sys.exit，避免在多线程环境中的问题
+    import os
+    os._exit(0)
 
 # 注册信号处理器
 signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
