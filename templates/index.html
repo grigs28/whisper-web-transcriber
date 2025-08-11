@@ -12,14 +12,16 @@
     <!-- 页面头部 -->
     <header class="header">
         <div class="container">
-            <div class="row align-items-center mb-3">
-                <div class="col-md-8">
-                    <h1><i class="fas fa-microphone-alt"></i> Whisper AI 音频转录平台</h1>
-                    <p class="text-muted mb-0">支持拖拽上传、多GPU选择、实时转录进度监控</p>
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <div class="header-left">
+                        <h1 class="mb-1"><i class="fas fa-microphone-alt"></i> Whisper AI 音频转录平台</h1>
+                        <p class="text-muted mb-0">支持拖拽上传、多GPU选择、实时转录进度监控</p>
+                    </div>
                 </div>
-                <div class="col-md-4 text-md-end">
-                    <div class="d-flex justify-content-end align-items-center">
-                        <div class="me-3">
+                <div class="col-md-6">
+                    <div class="header-right d-flex justify-content-end align-items-center">
+                        <div class="header-info-item">
                             <i class="fas fa-server"></i> 
                             {% if gpus %}
                                 GPU {{ gpus|join(',') }}
@@ -28,18 +30,23 @@
                             {% endif %}
                         </div>
                         {% if gpus %}
-                        <div class="me-3">
+                        <div class="header-info-item">
                             <i class="fas fa-memory"></i> 
                             <span id="headerGpuMemory" class="text-muted">加载中...</span>
                         </div>
                         {% endif %}
-                        <div class="me-3">
+                        <div class="header-info-item">
                             <i class="fas fa-database"></i> 
                             {{ uploaded_files|length }} 个上传文件
                         </div>
-                        <div>
+                        <div class="header-info-item">
                             <button class="btn btn-outline-info btn-sm" id="readmeBtn" data-bs-toggle="modal" data-bs-target="#readmeModal">
                                 <i class="fas fa-info-circle"></i> README
+                            </button>
+                        </div>
+                        <div class="header-info-item">
+                            <button class="btn btn-outline-light btn-sm" id="versionBtn" data-bs-toggle="modal" data-bs-target="#versionModal">
+                                <i class="fas fa-tag"></i> <span id="versionNumber">v0.01</span>
                             </button>
                         </div>
                     </div>
@@ -324,6 +331,33 @@
                                 <span class="visually-hidden">加载中...</span>
                             </div>
                             <p class="mt-2">正在加载README内容...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 版本说明模态框 -->
+    <div class="modal fade" id="versionModal" tabindex="-1" aria-labelledby="versionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="versionModalLabel">
+                        <i class="fas fa-tag"></i> 版本更新日志
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="versionContent" class="version-content">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="mt-2">正在加载版本信息...</p>
                         </div>
                     </div>
                 </div>

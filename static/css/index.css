@@ -641,6 +641,52 @@ body {
     color: rgba(255, 255, 255, 0.8) !important;
 }
 
+/* 头部布局样式 */
+.header-left h1 {
+    font-size: 1.8rem;
+    margin-bottom: 0.25rem;
+}
+
+.header-right {
+    gap: 2rem;
+}
+
+.header-info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    font-size: 0.95rem;
+}
+
+.header-info-item i {
+    width: 16px;
+    text-align: center;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .header-right {
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center !important;
+        margin-top: 1rem;
+    }
+    
+    .header-info-item {
+        font-size: 0.85rem;
+    }
+    
+    .header-left h1 {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+    
+    .header-left p {
+        text-align: center;
+    }
+}
+
 /* 确保modal关闭后移除backdrop */
 .modal.fade {
     transition: opacity 0.15s linear;
@@ -677,6 +723,58 @@ body {
 .readme-content p {
     margin-bottom: 1rem;
     color: #2c3e50;
+}
+
+/* 版本内容样式 */
+.version-content {
+    font-size: 0.95rem;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.version-content h1 {
+    color: #2c3e50;
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.5rem;
+}
+
+.version-content h2 {
+    color: #34495e;
+    font-size: 1.4rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid #bdc3c7;
+    padding-bottom: 0.3rem;
+}
+
+.version-content h3 {
+    color: #2c3e50;
+    font-size: 1.2rem;
+    margin-top: 1.2rem;
+    margin-bottom: 0.6rem;
+}
+
+.version-content p {
+    margin-bottom: 1rem;
+    color: #2c3e50;
+}
+
+.version-content ul {
+    margin-bottom: 1rem;
+}
+
+.version-content li {
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+}
+
+.version-content code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
 }
 
 .readme-content ul {

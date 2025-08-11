@@ -1358,6 +1358,56 @@ def api_readme():
         log_message('error', error_msg)
         return jsonify({"error": error_msg}), 500
 
+@app.route('/api/version')
+def api_version():
+    """
+    RESTful API端点：获取版本信息
+    """
+    try:
+        version_path = os.path.join(os.path.dirname(__file__), 'version.json')
+        if os.path.exists(version_path):
+            with open(version_path, 'r', encoding='utf-8') as f:
+                version_data = json.load(f)
+            return jsonify({
+                "status": "success",
+                "version": version_data.get('version', '0.01'),
+                "last_updated": version_data.get('last_updated', '')
+            })
+        else:
+            return jsonify({
+                "status": "success",
+                "version": "0.01",
+                "last_updated": datetime.now().strftime('%Y-%m-%d')
+            })
+    except Exception as e:
+        error_msg = f"读取版本信息失败: {str(e)}"
+        log_message('error', error_msg)
+        return jsonify({"error": error_msg}), 500
+
+@app.route('/api/changelog')
+def api_changelog():
+    """
+    RESTful API端点：获取版本更新日志
+    """
+    try:
+        changelog_path = os.path.join(os.path.dirname(__file__), 'CHANGELOG.md')
+        if os.path.exists(changelog_path):
+            with open(changelog_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({
+                "status": "success",
+                "content": content
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "版本日志文件不存在"
+            }), 404
+    except Exception as e:
+        error_msg = f"读取版本日志失败: {str(e)}"
+        log_message('error', error_msg)
+        return jsonify({"error": error_msg}), 500
+
 @app.route('/api/progress/<task_id>')
 def api_progress(task_id):
     """

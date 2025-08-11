@@ -1125,11 +1125,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 初始化GPU内存信息
+    // 初始化GPU内存信息（仅在页面加载时调用一次）
     fetchGpuMemoryInfo();
-    
-    // 定期更新GPU内存信息（每30秒）
-    setInterval(fetchGpuMemoryInfo, 30000);
     
     // 绑定全选和批量删除按钮事件
     const selectAllUploadedBtn = document.getElementById('selectAllUploaded');
@@ -1158,6 +1155,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (readmeBtn) {
         readmeBtn.addEventListener('click', showReadmeModal);
     }
+    
+    // 绑定版本按钮事件
+    const versionBtn = document.getElementById('versionBtn');
+    if (versionBtn) {
+        versionBtn.addEventListener('click', showVersionModal);
+    }
+    
+    // 初始化版本信息
+    fetchVersionInfo();
     
     // 检查转录状态并恢复UI状态
     checkTranscriptionStatus();
@@ -1553,4 +1559,63 @@ function convertMarkdownToHtml(markdown) {
     html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
     
     return `<div class="markdown-content">${html}</div>`;
+}
+
+function fetchVersionInfo() {
+    fetch('/api/version')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const versionBtn = document.getElementById('versionBtn');
+                if (versionBtn) {
+                    versionBtn.textContent = `v${data.version}`;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching version info:', error);
+        });
+}
+
+function showVersionModal() {
+    const modal = document.getElementById('versionModal');
+    const modalBody = modal.querySelector('.modal-body');
+    
+    // 显示加载状态
+    modalBody.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">加载版本信息中...</p></div>';
+    
+    // 显示模态框 - 使用Bootstrap 5的原生JavaScript API
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+    
+    // 添加模态框关闭事件监听器
+    modal.addEventListener('hidden.bs.modal', function () {
+        // 重置模态框内容为加载状态
+        modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-2">正在加载版本信息...</p></div>';
+        
+        // 确保移除所有遮罩
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        
+        // 恢复body的滚动
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    }, { once: true });
+    
+    // 获取版本日志
+    fetch('/api/changelog')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const htmlContent = convertMarkdownToHtml(data.content);
+                modalBody.innerHTML = `<div class="version-content">${htmlContent}</div>`;
+            } else {
+                modalBody.innerHTML = '<div class="alert alert-warning">版本日志加载失败</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading changelog:', error);
+            modalBody.innerHTML = '<div class="alert alert-danger">版本日志加载失败</div>';
+        });
 }
