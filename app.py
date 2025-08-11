@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from flask_socketio import SocketIO, emit
 import gc
+import signal
+import sys
 from config import config
 
 # ==============================
@@ -231,11 +233,20 @@ def release_model_memory(gpu_ids):
             for gpu_id in gpu_ids:
                 if gpu_id < torch.cuda.device_count():
                     with torch.cuda.device(gpu_id):
+                        # 清空缓存
                         torch.cuda.empty_cache()
+                        # 同步GPU操作
                         torch.cuda.synchronize()
-            log_message('info', f"GPU {gpu_ids} 显存已释放")
+                        # 重置GPU内存统计
+                        torch.cuda.reset_peak_memory_stats(gpu_id)
+                        torch.cuda.reset_accumulated_memory_stats(gpu_id)
+            log_message('info', f"GPU {gpu_ids} 显存已彻底释放")
         else:
             log_message('info', "CPU内存已释放")
+            
+        # 额外的垃圾回收
+        gc.collect()
+        
     except Exception as e:
         log_message('error', f"释放显存失败: {e}")
 
@@ -538,19 +549,33 @@ def transcribe_audio_process(file_path, output_path, model_name, language, gpu_i
         # 释放模型和显存
         if model is not None:
             try:
+                # 将模型移到CPU以释放GPU内存
+                if hasattr(model, 'to'):
+                    model.to('cpu')
                 del model
                 log_message('info', f"任务 {task_id} 模型已释放")
             except Exception as e:
                 log_message('warning', f"释放模型时出错: {e}")
         
-        # 释放显存
+        # 彻底释放显存
         try:
-            import torch, gc
-            gc.collect()
+            # 多次垃圾回收确保彻底清理
+            for _ in range(3):
+                gc.collect()
+            
+            # 使用改进的内存释放函数
+            if gpu_ids:
+                release_model_memory(gpu_ids)
+            
+            # 额外的GPU内存清理
             if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            release_model_memory(gpu_ids)
-            log_message('info', f"任务 {task_id} 显存已释放")
+                for gpu_id in (gpu_ids or []):
+                    if gpu_id < torch.cuda.device_count():
+                        with torch.cuda.device(gpu_id):
+                            torch.cuda.empty_cache()
+                            torch.cuda.synchronize()
+                            
+            log_message('info', f"任务 {task_id} 显存已彻底释放")
         except Exception as e:
             log_message('warning', f"释放显存时出错: {e}")
 
@@ -1113,6 +1138,66 @@ def internal_error(e):
     error_msg = "服务器内部错误"
     log_message('error', error_msg)
     return jsonify({"error": error_msg}), 500
+
+# ==============================
+# 信号处理和资源清理
+# ==============================
+
+def cleanup_resources():
+    """
+    清理所有资源，包括GPU内存
+    """
+    try:
+        log_message('info', "开始清理资源...")
+        
+        # 停止所有活动的转录任务
+        for task_id in list(active_transcriptions.keys()):
+            try:
+                task_info = active_transcriptions[task_id]
+                gpu_ids = task_info.get('gpu_ids', [])
+                
+                # 释放GPU内存
+                if gpu_ids:
+                    release_model_memory(gpu_ids)
+                    log_message('info', f"任务 {task_id} GPU内存已释放")
+                
+                # 从活动转录中移除
+                del active_transcriptions[task_id]
+            except Exception as e:
+                log_message('warning', f"清理任务 {task_id} 时出错: {e}")
+        
+        # 清理全局模型缓存
+        global models
+        models.clear()
+        
+        # 强制垃圾回收
+        gc.collect()
+        
+        # 清空所有GPU显存
+        if torch.cuda.is_available():
+            for i in range(torch.cuda.device_count()):
+                with torch.cuda.device(i):
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            log_message('info', "所有GPU显存已清空")
+        
+        log_message('info', "资源清理完成")
+        
+    except Exception as e:
+        log_message('error', f"资源清理时出错: {e}")
+
+def signal_handler(signum, frame):
+    """
+    信号处理函数，处理Ctrl+C等终止信号
+    """
+    log_message('info', f"接收到信号 {signum}，正在安全退出...")
+    cleanup_resources()
+    log_message('info', "程序已安全退出")
+    sys.exit(0)
+
+# 注册信号处理器
+signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+signal.signal(signal.SIGTERM, signal_handler)  # 终止信号
 
 # ==============================
 # 应用程序入口点
