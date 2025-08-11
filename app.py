@@ -69,12 +69,12 @@ log_handler = RotatingFileHandler(
     backupCount=BACKUP_COUNT
 )
 log_handler.setFormatter(log_formatter)
-log_handler.setLevel(logging.INFO)
+log_handler.setLevel(logging.DEBUG)
 
 # 获取应用日志记录器
 app_logger = app.logger
 app_logger.addHandler(log_handler)
-app_logger.setLevel(logging.INFO)
+app_logger.setLevel(logging.DEBUG)
 
 # 全局变量
 active_transcriptions = {}
@@ -225,7 +225,7 @@ def load_model(model_name, gpu_ids):
 
 def get_gpu_memory_info(gpu_id=None):
     """
-    获取GPU内存使用信息和GPU使用率
+    获取GPU内存使用信息和GPU使用率（Windows兼容版本）
     
     Args:
         gpu_id (int, optional): 指定GPU ID，如果为None则返回所有GPU信息
@@ -233,35 +233,78 @@ def get_gpu_memory_info(gpu_id=None):
     Returns:
         dict: GPU内存信息和使用率信息
     """
-    if not torch.cuda.is_available():
-        return {"available": False, "message": "GPU不可用"}
+    import sys
+    import threading
     
+    log_message('debug', f"获取GPU信息请求: gpu_id={gpu_id}")
+    
+    # Windows环境特殊处理
+    if sys.platform == 'win32':
+        log_message('info', "Windows环境: 执行CUDA上下文特殊初始化")
+    
+    # 显式初始化CUDA上下文（Windows多线程必需）
     try:
-        # 初始化pynvml（如果可用）
-        nvml_initialized = False
-        if PYNVML_AVAILABLE:
-            try:
-                pynvml.nvmlInit()
-                nvml_initialized = True
-            except Exception as e:
-                log_message('warning', f"pynvml初始化失败: {e}")
+        cuda_available = torch.cuda.is_available()
+        if not cuda_available:
+            print(f"[DEBUG] Thread {threading.current_thread().ident}: CUDA不可用", flush=True)
+            return {"available": False, "message": "GPU不可用"}
         
-        gpu_info = {}
-        gpu_count = torch.cuda.device_count()
+        device_count = torch.cuda.device_count()
+        if device_count == 0:
+            print(f"[DEBUG] Thread {threading.current_thread().ident}: 没有检测到GPU设备", flush=True)
+            return {"available": False, "message": "没有检测到GPU设备"}
         
-        if gpu_id is not None:
-            if gpu_id >= gpu_count:
-                return {"available": False, "message": f"GPU {gpu_id} 不存在"}
-            gpu_list = [gpu_id]
-        else:
-            gpu_list = list(range(gpu_count))
+        # 获取设备ID
+        device_id = gpu_id if gpu_id is not None else 0
+        if device_id >= device_count:
+            return {"available": False, "message": f"GPU {device_id} 不存在"}
         
-        for gid in gpu_list:
+        # 确保当前线程有CUDA上下文
+        with torch.cuda.device(device_id):
+            # 初始化临时张量来创建CUDA上下文
+            tmp_tensor = torch.tensor([1.0]).cuda()
+            del tmp_tensor
+            torch.cuda.empty_cache()
+        
+        print(f"[DEBUG] Thread {threading.current_thread().ident}: CUDA上下文初始化成功", flush=True)
+        log_message('debug', f"Thread {threading.current_thread().ident}: CUDA上下文初始化成功")
+        
+    except Exception as e:
+        print(f"[DEBUG] CUDA初始化失败: {e}", flush=True)
+        sys.stdout.flush()
+        log_message('error', f"CUDA初始化失败: {e}")
+        return {"available": False, "message": f"CUDA初始化失败: {e}"}
+    
+    # 初始化pynvml（如果可用）
+    nvml_initialized = False
+    if PYNVML_AVAILABLE:
+        try:
+            pynvml.nvmlInit()
+            nvml_initialized = True
+        except Exception as e:
+            log_message('warning', f"pynvml初始化失败: {e}")
+    
+    gpu_info = {}
+    gpu_count = torch.cuda.device_count()
+    
+    if gpu_id is not None:
+        gpu_list = [gpu_id]
+    else:
+        gpu_list = list(range(gpu_count))
+        
+    for gid in gpu_list:
+        try:
+            # 确保每个GPU都有上下文
+            with torch.cuda.device(gid):
+                tmp_tensor = torch.tensor([1.0]).cuda()
+                del tmp_tensor
+                torch.cuda.empty_cache()
+            
             props = torch.cuda.get_device_properties(gid)
             torch_total_memory = props.total_memory / 1024**3  # GB
             torch_allocated = torch.cuda.memory_allocated(gid) / 1024**3  # GB
             torch_reserved = torch.cuda.memory_reserved(gid) / 1024**3  # GB
-            
+        
             # 默认使用torch的内存信息
             total_memory = torch_total_memory
             used_memory = torch_reserved
@@ -295,11 +338,11 @@ def get_gpu_memory_info(gpu_id=None):
                         
                 except Exception as e:
                     log_message('warning', f"获取GPU {gid} 使用率失败: {e}")
-                    # 如果pynvml失败，回退到torch的内存信息
+                    # 如果pynvml失败，使用torch的内存信息
                     total_memory = torch_total_memory
                     used_memory = torch_reserved
                     free_memory = total_memory - used_memory
-            
+        
             gpu_info[gid] = {
                 "total": total_memory,
                 "allocated": torch_allocated,  # 保留torch分配的内存信息
@@ -311,10 +354,11 @@ def get_gpu_memory_info(gpu_id=None):
                 "memory_utilization": memory_utilization,
                 "temperature": temperature
             }
-        
-        return {"available": True, "gpus": gpu_info}
-    except Exception as e:
-        return {"available": False, "message": f"获取GPU信息失败: {e}"}
+        except Exception as e:
+            log_message('error', f"获取GPU {gid} 信息失败: {str(e)}")
+            continue
+    
+    return {"available": True, "gpus": gpu_info}
 
 def get_model_memory_requirements():
     """
@@ -1312,20 +1356,94 @@ def api_gpu_memory():
     """
     RESTful API端点：获取GPU内存使用状态
     """
+    print("[DEBUG] api_gpu_memory 被调用")
     try:
+        print("[DEBUG] 调用 get_gpu_memory_info()")
         gpu_info = get_gpu_memory_info()
+        print(f"[DEBUG] get_gpu_memory_info() 返回: {gpu_info}")
+        
+        print("[DEBUG] 调用 get_model_memory_requirements()")
         model_requirements = get_model_memory_requirements()
         
-        return jsonify({
+        print("[DEBUG] 调用 get_available_gpus()")
+        available_gpus = get_available_gpus()
+        print(f"[DEBUG] get_available_gpus() 返回: {available_gpus}")
+        
+        result = {
             "status": "success",
             "gpu_info": gpu_info,
             "model_requirements": model_requirements,
-            "available_gpus": get_available_gpus()
-        })
+            "available_gpus": available_gpus
+        }
+        print(f"[DEBUG] 最终返回结果: {result}")
+        return jsonify(result)
     except Exception as e:
         error_msg = f"获取GPU内存信息失败: {str(e)}"
         log_message('error', error_msg)
         return jsonify({"error": error_msg}), 500
+
+@app.route('/api/debug_cuda')
+def api_debug_cuda():
+    """
+    调试CUDA状态的API端点
+    
+    Returns:
+        JSON: 详细的CUDA调试信息
+    """
+    import sys
+    print(f"[DEBUG_CUDA] api_debug_cuda called", flush=True)
+    
+    # 直接测试torch.cuda
+    cuda_available = torch.cuda.is_available()
+    device_count = torch.cuda.device_count() if cuda_available else 0
+    
+    print(f"[DEBUG_CUDA] torch.cuda.is_available() = {cuda_available}", flush=True)
+    print(f"[DEBUG_CUDA] torch.cuda.device_count() = {device_count}", flush=True)
+    
+    debug_info = {
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda,
+        "cuda_available": cuda_available,
+        "device_count": device_count,
+        "devices": []
+    }
+    
+    if cuda_available:
+        for i in range(device_count):
+            try:
+                props = torch.cuda.get_device_properties(i)
+                device_info = {
+                    "id": i,
+                    "name": props.name,
+                    "total_memory_gb": props.total_memory / 1024**3,
+                    "allocated_gb": torch.cuda.memory_allocated(i) / 1024**3,
+                    "reserved_gb": torch.cuda.memory_reserved(i) / 1024**3
+                }
+                debug_info["devices"].append(device_info)
+                print(f"[DEBUG_CUDA] GPU {i}: {device_info}", flush=True)
+            except Exception as e:
+                print(f"[DEBUG_CUDA] Error getting info for GPU {i}: {e}", flush=True)
+                debug_info["devices"].append({"id": i, "error": str(e)})
+    
+    # 测试函数调用
+    try:
+        gpu_info_result = get_gpu_memory_info()
+        debug_info["get_gpu_memory_info_result"] = gpu_info_result
+        print(f"[DEBUG_CUDA] get_gpu_memory_info() = {gpu_info_result}", flush=True)
+    except Exception as e:
+        debug_info["get_gpu_memory_info_error"] = str(e)
+        print(f"[DEBUG_CUDA] get_gpu_memory_info() error: {e}", flush=True)
+    
+    try:
+        available_gpus_result = get_available_gpus()
+        debug_info["get_available_gpus_result"] = available_gpus_result
+        print(f"[DEBUG_CUDA] get_available_gpus() = {available_gpus_result}", flush=True)
+    except Exception as e:
+        debug_info["get_available_gpus_error"] = str(e)
+        print(f"[DEBUG_CUDA] get_available_gpus() error: {e}", flush=True)
+    
+    sys.stdout.flush()
+    return jsonify(debug_info)
 
 @app.route('/api/check_memory/<model_name>')
 def api_check_memory(model_name):

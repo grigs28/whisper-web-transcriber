@@ -34,6 +34,10 @@
                             <i class="fas fa-memory"></i> 
                             <span id="headerGpuMemory">加载中...</span>
                         </div>
+                        <div class="header-info-item">
+                            <i class="fas fa-thermometer-half"></i> 
+                            <span id="headerGpuTemperature">--°C</span>
+                        </div>
                         {% endif %}
                         <div class="header-info-item">
                             <i class="fas fa-database"></i> 
@@ -100,11 +104,7 @@
                                 </select>
                             </div>
                             
-                            <!-- GPU内存状态 -->
-                            <div class="mb-2" id="gpuMemoryStatus" style="display: none;">
-                                <label class="form-label"><i class="fas fa-memory"></i> GPU内存状态</label>
-                                <div id="memoryInfo" class="small text-muted"></div>
-                            </div>
+
                             
                             <!-- 模型选择 -->
                             <div class="mb-2">

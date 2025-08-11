@@ -79,12 +79,8 @@ socket.on('memory_warning', (data) => {
     
     warningHtml += `</div>`;
     
-    // 显示警告信息
-    const memoryInfo = document.getElementById('memoryInfo');
-    if (memoryInfo) {
-        memoryInfo.innerHTML = warningHtml;
-        document.getElementById('gpuMemoryStatus').style.display = 'block';
-    }
+    // 在状态日志中显示警告信息
+    addStatusLog(warningHtml.replace(/<[^>]*>/g, ''), 'warning');
     
     addStatusLog(message, 'warning');
 });
@@ -739,65 +735,52 @@ function fetchGpuMemoryInfo() {
 // 更新GPU内存显示
 function updateGpuMemoryDisplay() {
     const gpuSelector = document.getElementById('gpuSelector');
-    const memoryInfo = document.getElementById('memoryInfo');
-    const memoryStatus = document.getElementById('gpuMemoryStatus');
     const headerGpuMemory = document.getElementById('headerGpuMemory');
+    const headerGpuTemperature = document.getElementById('headerGpuTemperature');
     
-    if (!gpuSelector || !memoryInfo || !memoryStatus) return;
+    if (!gpuSelector) return;
     
     const selectedGpu = gpuSelector.value;
     
     if (!selectedGpu || !gpuMemoryInfo.gpu_memory) {
-        memoryStatus.style.display = 'none';
         if (headerGpuMemory) {
             headerGpuMemory.textContent = '无GPU信息';
+        }
+        if (headerGpuTemperature) {
+            headerGpuTemperature.textContent = '--°C';
         }
         return;
     }
     
     const gpuData = gpuMemoryInfo.gpu_memory[selectedGpu];
     if (!gpuData) {
-        memoryStatus.style.display = 'none';
         if (headerGpuMemory) {
             headerGpuMemory.textContent = '无GPU信息';
+        }
+        if (headerGpuTemperature) {
+            headerGpuTemperature.textContent = '--°C';
         }
         return;
     }
     
     const usedGB = (gpuData.used / 1024).toFixed(1);
     const totalGB = (gpuData.total / 1024).toFixed(1);
-    const freeGB = (gpuData.free / 1024).toFixed(1);
     const usagePercent = ((gpuData.used / gpuData.total) * 100).toFixed(1);
-    
-    let statusClass = 'text-white';
     
     // GPU使用率信息
     const gpuUtilization = gpuData.gpu_utilization !== null && gpuData.gpu_utilization !== undefined ? gpuData.gpu_utilization : 'N/A';
-    const memoryUtilization = gpuData.memory_utilization !== null && gpuData.memory_utilization !== undefined ? gpuData.memory_utilization : 'N/A';
     const temperature = gpuData.temperature !== null && gpuData.temperature !== undefined ? gpuData.temperature : 'N/A';
     
-    // 根据GPU使用率调整状态颜色
-    let utilizationClass = 'text-white';
-    
-    memoryInfo.innerHTML = `
-        <div class="${statusClass}">
-            <i class="fas fa-memory"></i> GPU ${selectedGpu}: ${usedGB}GB / ${totalGB}GB (${usagePercent}%)
-            <br><small>可用: ${freeGB}GB</small>
-        </div>
-        <div class="${utilizationClass} mt-1">
-            <i class="fas fa-microchip"></i> GPU使用率: ${gpuUtilization}${gpuUtilization !== 'N/A' ? '%' : ''}
-            <br><small>显存使用率: ${memoryUtilization}${memoryUtilization !== 'N/A' ? '%' : ''}</small>
-            ${temperature !== 'N/A' ? `<br><small><i class="fas fa-thermometer-half"></i> 温度: ${temperature}°C</small>` : ''}
-        </div>
-    `;
-    
-    // 更新页面头部的GPU信息
+    // 更新页面头部的GPU内存信息
     if (headerGpuMemory) {
         const utilizationText = gpuUtilization !== 'N/A' ? ` | ${gpuUtilization}%` : '';
-        headerGpuMemory.innerHTML = `<span class="${statusClass}">${usedGB}/${totalGB}GB (${usagePercent}%)${utilizationText}</span>`;
+        headerGpuMemory.textContent = `${usedGB}/${totalGB}GB (${usagePercent}%)${utilizationText}`;
     }
     
-    memoryStatus.style.display = 'block';
+    // 更新页面头部的GPU温度信息
+    if (headerGpuTemperature) {
+        headerGpuTemperature.textContent = temperature !== 'N/A' ? `${temperature}°C` : '--°C';
+    }
 }
 
 // 检查模型内存需求
