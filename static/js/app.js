@@ -769,9 +769,7 @@ function updateGpuMemoryDisplay() {
     const freeGB = (gpuData.free / 1024).toFixed(1);
     const usagePercent = ((gpuData.used / gpuData.total) * 100).toFixed(1);
     
-    let statusClass = 'text-success';
-    if (usagePercent > 80) statusClass = 'text-danger';
-    else if (usagePercent > 60) statusClass = 'text-warning';
+    let statusClass = 'text-white';
     
     // GPU使用率信息
     const gpuUtilization = gpuData.gpu_utilization !== null && gpuData.gpu_utilization !== undefined ? gpuData.gpu_utilization : 'N/A';
@@ -779,11 +777,7 @@ function updateGpuMemoryDisplay() {
     const temperature = gpuData.temperature !== null && gpuData.temperature !== undefined ? gpuData.temperature : 'N/A';
     
     // 根据GPU使用率调整状态颜色
-    let utilizationClass = 'text-success';
-    if (gpuUtilization !== 'N/A') {
-        if (gpuUtilization > 80) utilizationClass = 'text-danger';
-        else if (gpuUtilization > 60) utilizationClass = 'text-warning';
-    }
+    let utilizationClass = 'text-white';
     
     memoryInfo.innerHTML = `
         <div class="${statusClass}">
