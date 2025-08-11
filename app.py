@@ -17,6 +17,12 @@ import gc
 import signal
 import sys
 from config import config
+try:
+    import pynvml
+    PYNVML_AVAILABLE = True
+except ImportError:
+    PYNVML_AVAILABLE = False
+    pynvml = None
 
 # ==============================
 # 应用程序配置和初始化
@@ -219,18 +225,27 @@ def load_model(model_name, gpu_ids):
 
 def get_gpu_memory_info(gpu_id=None):
     """
-    获取GPU内存使用信息
+    获取GPU内存使用信息和GPU使用率
     
     Args:
         gpu_id (int, optional): 指定GPU ID，如果为None则返回所有GPU信息
         
     Returns:
-        dict: GPU内存信息
+        dict: GPU内存信息和使用率信息
     """
     if not torch.cuda.is_available():
         return {"available": False, "message": "GPU不可用"}
     
     try:
+        # 初始化pynvml（如果可用）
+        nvml_initialized = False
+        if PYNVML_AVAILABLE:
+            try:
+                pynvml.nvmlInit()
+                nvml_initialized = True
+            except Exception as e:
+                log_message('warning', f"pynvml初始化失败: {e}")
+        
         gpu_info = {}
         gpu_count = torch.cuda.device_count()
         
@@ -248,12 +263,37 @@ def get_gpu_memory_info(gpu_id=None):
             reserved = torch.cuda.memory_reserved(gid) / 1024**3  # GB
             free_memory = total_memory - reserved
             
+            # 获取GPU使用率信息
+            gpu_utilization = None
+            memory_utilization = None
+            temperature = None
+            
+            if nvml_initialized:
+                try:
+                    handle = pynvml.nvmlDeviceGetHandleByIndex(gid)
+                    # 获取GPU使用率
+                    utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                    gpu_utilization = utilization.gpu
+                    memory_utilization = utilization.memory
+                    
+                    # 获取GPU温度
+                    try:
+                        temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                    except:
+                        temperature = None
+                        
+                except Exception as e:
+                    log_message('warning', f"获取GPU {gid} 使用率失败: {e}")
+            
             gpu_info[gid] = {
                 "total": total_memory,
                 "allocated": allocated,
                 "reserved": reserved,
                 "free": free_memory,
-                "usage_percent": (reserved / total_memory) * 100
+                "usage_percent": (reserved / total_memory) * 100,
+                "gpu_utilization": gpu_utilization,
+                "memory_utilization": memory_utilization,
+                "temperature": temperature
             }
         
         return {"available": True, "gpus": gpu_info}
@@ -835,12 +875,16 @@ def index():
         ('ru', '俄文')
     ]
     
+    # 获取模型显存需求信息
+    model_memory_requirements = get_model_memory_requirements()
+    
     return render_template('index.html', 
                          uploaded_files=uploaded_files, 
                          output_files=output_files, 
                          gpus=gpus, 
                          default_gpu_ids=DEFAULT_GPU_ID,
                          whisper_models=whisper_models,
+                         model_memory_requirements=model_memory_requirements,
                          languages=languages)
 
 @app.route('/upload', methods=['POST'])

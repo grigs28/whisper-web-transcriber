@@ -27,6 +27,12 @@
                                 CPU
                             {% endif %}
                         </div>
+                        {% if gpus %}
+                        <div class="me-3">
+                            <i class="fas fa-memory"></i> 
+                            <span id="headerGpuMemory" class="text-muted">加载中...</span>
+                        </div>
+                        {% endif %}
                         <div class="me-3">
                             <i class="fas fa-database"></i> 
                             {{ uploaded_files|length }} 个上传文件
@@ -99,7 +105,7 @@
                                 <select class="form-select" name="model" id="modelSelector">
                                     {% for model in whisper_models %}
                                         <option value="{{ model }}" {% if model == 'large-v3' %}selected{% endif %}>
-                                            whisper-{{ model }}
+                                            whisper-{{ model }} ({{ model_memory_requirements.get(model, 'N/A') }}GB)
                                         </option>
                                     {% endfor %}
                                 </select>

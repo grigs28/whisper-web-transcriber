@@ -8,3 +8,5 @@ werkzeug==2.3.7
 gevent>=23.9.1
 gevent-websocket>=0.10.1
 pathlib2>=2.3.7
+python-dotenv>=1.0.0
+pynvml>=11.5.0

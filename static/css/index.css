@@ -628,6 +628,26 @@ body {
     padding: 1.5rem;
     line-height: 1.6;
     font-size: 0.95rem;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* 头部GPU显存信息样式 */
+.header #headerGpuMemory {
+    color: white !important;
+}
+
+.header .text-muted {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 确保modal关闭后移除backdrop */
+.modal.fade {
+    transition: opacity 0.15s linear;
+}
+
+.modal-backdrop {
+    transition: opacity 0.15s linear;
 }
 
 .readme-content h1 {

@@ -709,7 +709,25 @@ function fetchGpuMemoryInfo() {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                gpuMemoryInfo = data.data;
+                // 更新数据结构以匹配新的API响应
+                gpuMemoryInfo = {
+                    gpu_memory: {}
+                };
+                
+                // 转换新的GPU信息格式
+                if (data.gpu_info && data.gpu_info.available && data.gpu_info.gpus) {
+                    for (const [gpuId, gpuData] of Object.entries(data.gpu_info.gpus)) {
+                        gpuMemoryInfo.gpu_memory[gpuId] = {
+                            used: gpuData.reserved * 1024, // 转换为MB
+                            total: gpuData.total * 1024,   // 转换为MB
+                            free: gpuData.free * 1024,     // 转换为MB
+                            gpu_utilization: gpuData.gpu_utilization,
+                            memory_utilization: gpuData.memory_utilization,
+                            temperature: gpuData.temperature
+                        };
+                    }
+                }
+                
                 updateGpuMemoryDisplay();
             }
         })
@@ -723,6 +741,7 @@ function updateGpuMemoryDisplay() {
     const gpuSelector = document.getElementById('gpuSelector');
     const memoryInfo = document.getElementById('memoryInfo');
     const memoryStatus = document.getElementById('gpuMemoryStatus');
+    const headerGpuMemory = document.getElementById('headerGpuMemory');
     
     if (!gpuSelector || !memoryInfo || !memoryStatus) return;
     
@@ -730,12 +749,18 @@ function updateGpuMemoryDisplay() {
     
     if (!selectedGpu || !gpuMemoryInfo.gpu_memory) {
         memoryStatus.style.display = 'none';
+        if (headerGpuMemory) {
+            headerGpuMemory.textContent = '无GPU信息';
+        }
         return;
     }
     
     const gpuData = gpuMemoryInfo.gpu_memory[selectedGpu];
     if (!gpuData) {
         memoryStatus.style.display = 'none';
+        if (headerGpuMemory) {
+            headerGpuMemory.textContent = '无GPU信息';
+        }
         return;
     }
     
@@ -748,12 +773,35 @@ function updateGpuMemoryDisplay() {
     if (usagePercent > 80) statusClass = 'text-danger';
     else if (usagePercent > 60) statusClass = 'text-warning';
     
+    // GPU使用率信息
+    const gpuUtilization = gpuData.gpu_utilization !== null && gpuData.gpu_utilization !== undefined ? gpuData.gpu_utilization : 'N/A';
+    const memoryUtilization = gpuData.memory_utilization !== null && gpuData.memory_utilization !== undefined ? gpuData.memory_utilization : 'N/A';
+    const temperature = gpuData.temperature !== null && gpuData.temperature !== undefined ? gpuData.temperature : 'N/A';
+    
+    // 根据GPU使用率调整状态颜色
+    let utilizationClass = 'text-success';
+    if (gpuUtilization !== 'N/A') {
+        if (gpuUtilization > 80) utilizationClass = 'text-danger';
+        else if (gpuUtilization > 60) utilizationClass = 'text-warning';
+    }
+    
     memoryInfo.innerHTML = `
         <div class="${statusClass}">
             <i class="fas fa-memory"></i> GPU ${selectedGpu}: ${usedGB}GB / ${totalGB}GB (${usagePercent}%)
             <br><small>可用: ${freeGB}GB</small>
         </div>
+        <div class="${utilizationClass} mt-1">
+            <i class="fas fa-microchip"></i> GPU使用率: ${gpuUtilization}${gpuUtilization !== 'N/A' ? '%' : ''}
+            <br><small>显存使用率: ${memoryUtilization}${memoryUtilization !== 'N/A' ? '%' : ''}</small>
+            ${temperature !== 'N/A' ? `<br><small><i class="fas fa-thermometer-half"></i> 温度: ${temperature}°C</small>` : ''}
+        </div>
     `;
+    
+    // 更新页面头部的GPU信息
+    if (headerGpuMemory) {
+        const utilizationText = gpuUtilization !== 'N/A' ? ` | ${gpuUtilization}%` : '';
+        headerGpuMemory.innerHTML = `<span class="${statusClass}">${usedGB}/${totalGB}GB (${usagePercent}%)${utilizationText}</span>`;
+    }
     
     memoryStatus.style.display = 'block';
 }
@@ -1424,7 +1472,8 @@ function checkTranscriptionStatus() {
 }
 
 function showReadmeModal() {
-    const readmeModal = new bootstrap.Modal(document.getElementById('readmeModal'));
+    const readmeModalElement = document.getElementById('readmeModal');
+    const readmeModal = new bootstrap.Modal(readmeModalElement);
     const readmeContent = document.getElementById('readmeContent');
     
     // 显示加载状态
@@ -1436,6 +1485,16 @@ function showReadmeModal() {
             <p class="mt-2">正在加载README内容...</p>
         </div>
     `;
+    
+    // 添加modal关闭事件监听器，确保移除backdrop
+    readmeModalElement.addEventListener('hidden.bs.modal', function() {
+        // 确保移除所有backdrop
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        // 恢复body的overflow
+        document.body.style.overflow = '';
+        document.body.classList.remove('modal-open');
+    }, { once: true });
     
     // 显示模态框
     readmeModal.show();
