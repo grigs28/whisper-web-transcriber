@@ -307,6 +307,9 @@ MAX_CONCURRENT_TRANSCRIPTIONS=3
 
 # 转录超时时间（秒）
 TRANSCRIPTION_TIMEOUT=3600
+
+# 音频分段时间（秒，用于长音频处理）
+SEGMENT_DURATION=300
 ```
 
 #### 📝 日志配置
