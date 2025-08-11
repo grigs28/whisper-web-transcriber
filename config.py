@@ -92,6 +92,10 @@ class Config:
     def TRANSCRIPTION_TIMEOUT(self) -> int:
         return int(os.getenv('TRANSCRIPTION_TIMEOUT', 3600))
     
+    @property
+    def SEGMENT_DURATION(self) -> int:
+        return int(os.getenv('SEGMENT_DURATION', 300))
+    
     # Logging
     @property
     def LOG_LEVEL(self) -> str:

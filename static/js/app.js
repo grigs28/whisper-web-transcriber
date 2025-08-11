@@ -1184,6 +1184,18 @@ function checkTranscriptionStatus() {
             
             // 检查队列中的任务
             if (data.queue && data.queue.length > 0) {
+                // 清空现有队列显示，避免重复
+                const queueContainer = document.getElementById('queueItems');
+                if (queueContainer) {
+                    // 停止所有现有的计时器
+                    Object.keys(queueItems).forEach(taskId => {
+                        stopTaskTimer(taskId);
+                    });
+                    // 清空队列容器和记录
+                    queueContainer.innerHTML = '';
+                    queueItems = {};
+                }
+                
                 data.queue.forEach((task, index) => {
                     // 为队列中的任务生成task_id（如果没有的话）
                     const taskId = task.task_id || `queue_${index}_${Date.now()}`;
@@ -1198,6 +1210,16 @@ function checkTranscriptionStatus() {
                         startTaskTimer(taskId, elapsedSeconds);
                     }
                 });
+            } else {
+                // 如果没有队列任务，清空显示
+                const queueContainer = document.getElementById('queueItems');
+                if (queueContainer) {
+                    Object.keys(queueItems).forEach(taskId => {
+                        stopTaskTimer(taskId);
+                    });
+                    queueContainer.innerHTML = '';
+                    queueItems = {};
+                }
             }
         })
         .catch(error => {

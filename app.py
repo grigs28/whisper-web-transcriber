@@ -252,8 +252,8 @@ def transcribe_with_progress(model, file_path, language, task_id):
         sample_rate = whisper.audio.SAMPLE_RATE
         total_duration = len(audio_data) / sample_rate
         
-        # 分段处理，每段30秒，重叠2秒避免单词截断
-        segment_duration = 30  # 秒
+        # 分段处理，重叠2秒避免单词截断
+        segment_duration = config.SEGMENT_DURATION  # 从配置文件读取分段时间
         overlap_duration = 2   # 重叠2秒
         segments = []
         current_progress = 15  # 从15%开始
