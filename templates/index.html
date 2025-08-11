@@ -14,11 +14,11 @@
         <div class="container">
             <div class="row align-items-center mb-3">
                 <div class="col-md-8">
-                    <h1><i class="fas fa-microphone-alt"></i> Whisper 音频转录管理系统</h1>
-                    <p>支持拖拽上传、多GPU选择、自动清理过期文件</p>
+                    <h1><i class="fas fa-microphone-alt"></i> Whisper AI 音频转录平台</h1>
+                    <p class="text-muted mb-0">支持拖拽上传、多GPU选择、实时转录进度监控</p>
                 </div>
                 <div class="col-md-4 text-md-end">
-                    <div class="d-flex justify-content-end">
+                    <div class="d-flex justify-content-end align-items-center">
                         <div class="me-3">
                             <i class="fas fa-server"></i> 
                             {% if gpus %}
@@ -27,9 +27,14 @@
                                 CPU
                             {% endif %}
                         </div>
-                        <div>
+                        <div class="me-3">
                             <i class="fas fa-database"></i> 
                             {{ uploaded_files|length }} 个上传文件
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-info btn-sm" id="readmeBtn" data-bs-toggle="modal" data-bs-target="#readmeModal">
+                                <i class="fas fa-info-circle"></i> README
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -80,6 +85,12 @@
                                         <option value="">无GPU可用 (使用CPU)</option>
                                     {% endif %}
                                 </select>
+                            </div>
+                            
+                            <!-- GPU内存状态 -->
+                            <div class="mb-2" id="gpuMemoryStatus" style="display: none;">
+                                <label class="form-label"><i class="fas fa-memory"></i> GPU内存状态</label>
+                                <div id="memoryInfo" class="small text-muted"></div>
                             </div>
                             
                             <!-- 模型选择 -->
@@ -285,6 +296,33 @@
                             您的浏览器不支持音频播放。
                         </audio>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- README 模态框 -->
+    <div class="modal fade" id="readmeModal" tabindex="-1" aria-labelledby="readmeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="readmeModalLabel">
+                        <i class="fas fa-info-circle"></i> README - Whisper 音频转录管理系统
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="readmeContent" class="readme-content">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="mt-2">正在加载README内容...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>

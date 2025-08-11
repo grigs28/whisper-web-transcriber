@@ -16,6 +16,7 @@ let queueItems = {};
 let uploadedFiles = []; // 存储上传的文件名
 let currentTaskId = null; // 当前活动的任务ID
 let isTranscribing = false; // 是否正在转录
+let gpuMemoryInfo = {}; // GPU内存信息
 
 // ==============================
 // WebSocket事件处理
@@ -56,6 +57,36 @@ socket.on('connect_error', (error) => {
 // 接收日志消息
 socket.on('log_message', (data) => {
     addStatusLog(data.message, data.level);
+});
+
+// 接收内存警告
+socket.on('memory_warning', (data) => {
+    const message = data.message || '显存不足';
+    const insufficientGpus = data.insufficient_gpus || [];
+    const recommendedModels = data.recommended_models || [];
+    
+    let warningHtml = `<div class="alert alert-warning" role="alert">`;
+    warningHtml += `<h6><i class="fas fa-exclamation-triangle"></i> ${message}</h6>`;
+    
+    if (insufficientGpus.length > 0) {
+        warningHtml += `<p><strong>显存不足的GPU:</strong> ${insufficientGpus.join(', ')}</p>`;
+    }
+    
+    if (recommendedModels.length > 0) {
+        warningHtml += `<p><strong>建议使用的模型:</strong> ${recommendedModels.join(', ')}</p>`;
+        warningHtml += `<p class="mb-0">请选择较小的模型或等待当前任务完成后再试。</p>`;
+    }
+    
+    warningHtml += `</div>`;
+    
+    // 显示警告信息
+    const memoryInfo = document.getElementById('memoryInfo');
+    if (memoryInfo) {
+        memoryInfo.innerHTML = warningHtml;
+        document.getElementById('gpuMemoryStatus').style.display = 'block';
+    }
+    
+    addStatusLog(message, 'warning');
 });
 
 // 接收任务更新
@@ -617,6 +648,41 @@ function startTranscription() {
                 checkbox.disabled = true;
             });
             dropArea.classList.add('disabled');
+            
+            // 清除内存警告显示
+            const memoryStatus = document.getElementById('gpuMemoryStatus');
+            if (memoryStatus) {
+                memoryStatus.style.display = 'none';
+            }
+        } else if (data.status === 'memory_insufficient') {
+            // 处理内存不足的情况
+            const message = data.message || '显存不足，无法开始转录';
+            const insufficientGpus = data.insufficient_gpus || [];
+            const recommendedModels = data.recommended_models || [];
+            
+            let warningHtml = `<div class="alert alert-danger" role="alert">`;
+            warningHtml += `<h6><i class="fas fa-exclamation-triangle"></i> ${message}</h6>`;
+            
+            if (insufficientGpus.length > 0) {
+                warningHtml += `<p><strong>显存不足的GPU:</strong> ${insufficientGpus.join(', ')}</p>`;
+            }
+            
+            if (recommendedModels.length > 0) {
+                warningHtml += `<p><strong>建议使用的模型:</strong> ${recommendedModels.join(', ')}</p>`;
+                warningHtml += `<p class="mb-0">请选择较小的模型或等待当前任务完成后再试。</p>`;
+            }
+            
+            warningHtml += `</div>`;
+            
+            // 显示内存警告
+            const memoryInfo = document.getElementById('memoryInfo');
+            const memoryStatus = document.getElementById('gpuMemoryStatus');
+            if (memoryInfo && memoryStatus) {
+                memoryInfo.innerHTML = warningHtml;
+                memoryStatus.style.display = 'block';
+            }
+            
+            addStatusLog(message, 'error');
         } else {
             addStatusLog('提交转录任务失败: ' + (data.error || '未知错误'), 'error');
         }
@@ -632,6 +698,107 @@ function startTranscription() {
 
 // 停止转录
 // 停止转录功能已移除
+
+// ==============================
+// GPU内存管理函数
+// ==============================
+
+// 获取GPU内存信息
+function fetchGpuMemoryInfo() {
+    fetch('/api/gpu_memory')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                gpuMemoryInfo = data.data;
+                updateGpuMemoryDisplay();
+            }
+        })
+        .catch(error => {
+            console.error('获取GPU内存信息失败:', error);
+        });
+}
+
+// 更新GPU内存显示
+function updateGpuMemoryDisplay() {
+    const gpuSelector = document.getElementById('gpuSelector');
+    const memoryInfo = document.getElementById('memoryInfo');
+    const memoryStatus = document.getElementById('gpuMemoryStatus');
+    
+    if (!gpuSelector || !memoryInfo || !memoryStatus) return;
+    
+    const selectedGpu = gpuSelector.value;
+    
+    if (!selectedGpu || !gpuMemoryInfo.gpu_memory) {
+        memoryStatus.style.display = 'none';
+        return;
+    }
+    
+    const gpuData = gpuMemoryInfo.gpu_memory[selectedGpu];
+    if (!gpuData) {
+        memoryStatus.style.display = 'none';
+        return;
+    }
+    
+    const usedGB = (gpuData.used / 1024).toFixed(1);
+    const totalGB = (gpuData.total / 1024).toFixed(1);
+    const freeGB = (gpuData.free / 1024).toFixed(1);
+    const usagePercent = ((gpuData.used / gpuData.total) * 100).toFixed(1);
+    
+    let statusClass = 'text-success';
+    if (usagePercent > 80) statusClass = 'text-danger';
+    else if (usagePercent > 60) statusClass = 'text-warning';
+    
+    memoryInfo.innerHTML = `
+        <div class="${statusClass}">
+            <i class="fas fa-memory"></i> GPU ${selectedGpu}: ${usedGB}GB / ${totalGB}GB (${usagePercent}%)
+            <br><small>可用: ${freeGB}GB</small>
+        </div>
+    `;
+    
+    memoryStatus.style.display = 'block';
+}
+
+// 检查模型内存需求
+function checkModelMemoryRequirement() {
+    const gpuSelector = document.getElementById('gpuSelector');
+    const modelSelector = document.getElementById('modelSelector');
+    
+    if (!gpuSelector || !modelSelector) return;
+    
+    const selectedGpu = gpuSelector.value;
+    const selectedModel = modelSelector.value;
+    
+    if (!selectedGpu || !selectedModel) return;
+    
+    fetch(`/api/check_memory/${selectedModel}?gpu_ids=${selectedGpu}`)
+        .then(response => response.json())
+        .then(data => {
+            const memoryInfo = document.getElementById('memoryInfo');
+            const memoryStatus = document.getElementById('gpuMemoryStatus');
+            
+            if (data.status === 'insufficient') {
+                let warningHtml = `<div class="alert alert-warning" role="alert">`;
+                warningHtml += `<h6><i class="fas fa-exclamation-triangle"></i> ${data.message}</h6>`;
+                
+                if (data.insufficient_gpus && data.insufficient_gpus.length > 0) {
+                    warningHtml += `<p><strong>显存不足的GPU:</strong> ${data.insufficient_gpus.join(', ')}</p>`;
+                }
+                
+                if (data.recommended_models && data.recommended_models.length > 0) {
+                    warningHtml += `<p><strong>建议使用的模型:</strong> ${data.recommended_models.join(', ')}</p>`;
+                }
+                
+                warningHtml += `</div>`;
+                memoryInfo.innerHTML = warningHtml;
+                memoryStatus.style.display = 'block';
+            } else {
+                updateGpuMemoryDisplay();
+            }
+        })
+        .catch(error => {
+            console.error('检查模型内存需求失败:', error);
+        });
+}
 
 // ==============================
 // UI功能函数
@@ -893,6 +1060,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // 绑定GPU选择器事件
+    const gpuSelector = document.getElementById('gpuSelector');
+    if (gpuSelector) {
+        gpuSelector.addEventListener('change', function() {
+            fetchGpuMemoryInfo();
+            checkModelMemoryRequirement();
+        });
+    }
+    
+    // 绑定模型选择器事件
+    const modelSelector = document.getElementById('modelSelector');
+    if (modelSelector) {
+        modelSelector.addEventListener('change', function() {
+            checkModelMemoryRequirement();
+        });
+    }
+    
+    // 初始化GPU内存信息
+    fetchGpuMemoryInfo();
+    
+    // 定期更新GPU内存信息（每30秒）
+    setInterval(fetchGpuMemoryInfo, 30000);
+    
     // 绑定全选和批量删除按钮事件
     const selectAllUploadedBtn = document.getElementById('selectAllUploaded');
     const deleteSelectedUploadedBtn = document.getElementById('deleteSelectedUploaded');
@@ -914,6 +1104,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化音频播放器事件
     initializeAudioPlayerEvents();
+    
+    // 绑定README按钮事件
+    const readmeBtn = document.getElementById('readmeBtn');
+    if (readmeBtn) {
+        readmeBtn.addEventListener('click', showReadmeModal);
+    }
     
     // 检查转录状态并恢复UI状态
     checkTranscriptionStatus();
@@ -1225,4 +1421,77 @@ function checkTranscriptionStatus() {
         .catch(error => {
             console.error('Error checking transcription status:', error);
         });
+}
+
+function showReadmeModal() {
+    const readmeModal = new bootstrap.Modal(document.getElementById('readmeModal'));
+    const readmeContent = document.getElementById('readmeContent');
+    
+    // 显示加载状态
+    readmeContent.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2">正在加载README内容...</p>
+        </div>
+    `;
+    
+    // 显示模态框
+    readmeModal.show();
+    
+    // 获取README内容
+    fetch('/api/readme')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // 将Markdown转换为HTML并显示
+                readmeContent.innerHTML = convertMarkdownToHtml(data.content);
+            } else {
+                readmeContent.innerHTML = `
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        ${data.message || 'README文件未找到'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading README:', error);
+            readmeContent.innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <i class="fas fa-times-circle"></i>
+                    加载README失败: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function convertMarkdownToHtml(markdown) {
+    // 简单的Markdown到HTML转换
+    let html = markdown
+        // 标题
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        // 粗体
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // 斜体
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // 代码块
+        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+        // 行内代码
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        // 链接
+        .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        // 列表项
+        .replace(/^\* (.*$)/gim, '<li>$1</li>')
+        .replace(/^- (.*$)/gim, '<li>$1</li>')
+        // 换行
+        .replace(/\n/g, '<br>');
+    
+    // 包装列表项
+    html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+    
+    return `<div class="markdown-content">${html}</div>`;
 }

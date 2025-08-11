@@ -217,6 +217,132 @@ def load_model(model_name, gpu_ids):
         log_message('error', f"加载模型失败: {e}")
         return None
 
+def get_gpu_memory_info(gpu_id=None):
+    """
+    获取GPU内存使用信息
+    
+    Args:
+        gpu_id (int, optional): 指定GPU ID，如果为None则返回所有GPU信息
+        
+    Returns:
+        dict: GPU内存信息
+    """
+    if not torch.cuda.is_available():
+        return {"available": False, "message": "GPU不可用"}
+    
+    try:
+        gpu_info = {}
+        gpu_count = torch.cuda.device_count()
+        
+        if gpu_id is not None:
+            if gpu_id >= gpu_count:
+                return {"available": False, "message": f"GPU {gpu_id} 不存在"}
+            gpu_list = [gpu_id]
+        else:
+            gpu_list = list(range(gpu_count))
+        
+        for gid in gpu_list:
+            props = torch.cuda.get_device_properties(gid)
+            total_memory = props.total_memory / 1024**3  # GB
+            allocated = torch.cuda.memory_allocated(gid) / 1024**3  # GB
+            reserved = torch.cuda.memory_reserved(gid) / 1024**3  # GB
+            free_memory = total_memory - reserved
+            
+            gpu_info[gid] = {
+                "total": total_memory,
+                "allocated": allocated,
+                "reserved": reserved,
+                "free": free_memory,
+                "usage_percent": (reserved / total_memory) * 100
+            }
+        
+        return {"available": True, "gpus": gpu_info}
+    except Exception as e:
+        return {"available": False, "message": f"获取GPU信息失败: {e}"}
+
+def get_model_memory_requirements():
+    """
+    获取不同Whisper模型的显存需求估算（GB）
+    
+    Returns:
+        dict: 模型名称到显存需求的映射
+    """
+    return {
+        "tiny": 1.0,
+        "base": 1.5,
+        "small": 2.5,
+        "medium": 5.0,
+        "large": 10.0,
+        "large-v2": 10.0,
+        "large-v3": 10.0
+    }
+
+def check_gpu_memory_sufficient(model_name, gpu_ids):
+    """
+    检查GPU显存是否足够加载指定模型
+    
+    Args:
+        model_name (str): 模型名称
+        gpu_ids (list): GPU ID列表
+        
+    Returns:
+        dict: 检查结果
+    """
+    if not gpu_ids or not torch.cuda.is_available():
+        return {"sufficient": True, "message": "使用CPU模式，无需检查GPU显存"}
+    
+    try:
+        model_requirements = get_model_memory_requirements()
+        required_memory = model_requirements.get(model_name, 5.0)  # 默认5GB
+        
+        gpu_info = get_gpu_memory_info()
+        if not gpu_info["available"]:
+            return {"sufficient": False, "message": gpu_info["message"]}
+        
+        # 检查每个指定的GPU
+        insufficient_gpus = []
+        for gpu_id in gpu_ids:
+            if gpu_id in gpu_info["gpus"]:
+                gpu_data = gpu_info["gpus"][gpu_id]
+                if gpu_data["free"] < required_memory:
+                    insufficient_gpus.append({
+                        "gpu_id": gpu_id,
+                        "free": gpu_data["free"],
+                        "required": required_memory
+                    })
+        
+        if insufficient_gpus:
+            # 推荐更小的模型
+            recommended_models = []
+            for model, req_mem in model_requirements.items():
+                if req_mem <= min(gpu_info["gpus"][gid]["free"] for gid in gpu_ids if gid in gpu_info["gpus"]):
+                    recommended_models.append(model)
+            
+            message = f"显存不足。模型 '{model_name}' 需要 {required_memory:.1f}GB，但以下GPU显存不足：\n"
+            for gpu in insufficient_gpus:
+                message += f"GPU {gpu['gpu_id']}: 可用 {gpu['free']:.1f}GB / 需要 {gpu['required']:.1f}GB\n"
+            
+            if recommended_models:
+                message += f"\n推荐使用更小的模型: {', '.join(recommended_models[-3:])}"
+            
+            return {
+                "sufficient": False,
+                "message": message,
+                "insufficient_gpus": insufficient_gpus,
+                "recommended_models": recommended_models[-3:] if recommended_models else []
+            }
+        
+        return {
+            "sufficient": True,
+            "message": f"显存充足，可以加载模型 '{model_name}'"
+        }
+        
+    except Exception as e:
+        return {
+            "sufficient": False,
+            "message": f"检查显存时出错: {e}"
+        }
+
 def release_model_memory(gpu_ids):
     """
     释放模型显存
@@ -463,11 +589,39 @@ def transcribe_audio_process(file_path, output_path, model_name, language, gpu_i
         socketio.emit('task_update', {
             'task_id': task_id,
             'status': 'processing',
-            'message': f'开始转录: {os.path.basename(file_path)}',
+            'message': f'正在检查显存并准备转录: {os.path.basename(file_path)}',
             'filename': os.path.basename(file_path)
         }, namespace='/status')
         
         log_message('info', f"任务 {task_id} 开始转录: {os.path.basename(file_path)}")
+        
+        # 显存预检查
+        memory_check = check_gpu_memory_sufficient(model_name, gpu_ids)
+        if not memory_check["sufficient"]:
+            # 显存不足，发送警告信息
+            socketio.emit('task_update', {
+                'task_id': task_id,
+                'status': 'memory_warning',
+                'message': memory_check["message"],
+                'insufficient_gpus': memory_check.get("insufficient_gpus", []),
+                'recommended_models': memory_check.get("recommended_models", [])
+            }, namespace='/status')
+            
+            # 记录警告信息
+            log_message('warning', f"任务 {task_id} 显存不足: {memory_check['message']}")
+            
+            # 可以选择等待或使用推荐模型
+            if memory_check.get("recommended_models"):
+                # 如果有推荐模型，可以考虑自动降级（可选功能）
+                pass
+        
+        # 发送加载模型状态
+        socketio.emit('task_update', {
+            'task_id': task_id,
+            'status': 'loading_model',
+            'message': f'正在加载模型 {model_name}...',
+            'filename': os.path.basename(file_path)
+        }, namespace='/status')
         
         # 加载模型
         model = load_model(model_name, gpu_ids)
@@ -756,6 +910,20 @@ def add_to_queue():
         
         if not gpu_ids:
             gpu_ids = DEFAULT_GPU_ID
+        
+        # 显存预检查
+        memory_check = check_gpu_memory_sufficient(selected_model, gpu_ids)
+        if not memory_check["sufficient"]:
+            # 显存不足，返回警告信息和推荐模型
+            log_message('warning', f"显存不足，无法加载模型 {selected_model}: {memory_check['message']}")
+            return jsonify({
+                "status": "memory_insufficient",
+                "message": memory_check["message"],
+                "insufficient_gpus": memory_check.get("insufficient_gpus", []),
+                "recommended_models": memory_check.get("recommended_models", []),
+                "current_model": selected_model,
+                "gpu_ids": gpu_ids
+            }), 400
         
         added_files = []
         for filename in filenames:
@@ -1076,6 +1244,73 @@ def api_status():
         })
     except Exception as e:
         error_msg = f"获取状态失败: {str(e)}"
+        log_message('error', error_msg)
+        return jsonify({"error": error_msg}), 500
+
+@app.route('/api/gpu_memory')
+def api_gpu_memory():
+    """
+    RESTful API端点：获取GPU内存使用状态
+    """
+    try:
+        gpu_info = get_gpu_memory_info()
+        model_requirements = get_model_memory_requirements()
+        
+        return jsonify({
+            "status": "success",
+            "gpu_info": gpu_info,
+            "model_requirements": model_requirements,
+            "available_gpus": get_available_gpus()
+        })
+    except Exception as e:
+        error_msg = f"获取GPU内存信息失败: {str(e)}"
+        log_message('error', error_msg)
+        return jsonify({"error": error_msg}), 500
+
+@app.route('/api/check_memory/<model_name>')
+def api_check_memory(model_name):
+    """
+    RESTful API端点：检查指定模型的显存需求
+    """
+    try:
+        gpu_ids = request.args.getlist('gpu_ids', type=int)
+        if not gpu_ids:
+            gpu_ids = DEFAULT_GPU_ID
+        
+        memory_check = check_gpu_memory_sufficient(model_name, gpu_ids)
+        
+        return jsonify({
+            "status": "success",
+            "model_name": model_name,
+            "gpu_ids": gpu_ids,
+            "memory_check": memory_check
+        })
+    except Exception as e:
+        error_msg = f"检查显存需求失败: {str(e)}"
+        log_message('error', error_msg)
+        return jsonify({"error": error_msg}), 500
+
+@app.route('/api/readme')
+def api_readme():
+    """
+    RESTful API端点：获取README内容
+    """
+    try:
+        readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
+        if os.path.exists(readme_path):
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                readme_content = f.read()
+            return jsonify({
+                "status": "success",
+                "content": readme_content
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "README.md 文件未找到"
+            }), 404
+    except Exception as e:
+        error_msg = f"读取README失败: {str(e)}"
         log_message('error', error_msg)
         return jsonify({"error": error_msg}), 500
 
