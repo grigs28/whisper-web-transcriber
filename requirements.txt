@@ -1,7 +1,11 @@
 flask==2.3.3
 flask-socketio==5.3.6
-torch>=2.1.0
-torchaudio>=2.1.0
+# 注意：需要安装CUDA版本的PyTorch（支持CUDA 11.8及以上），使用以下命令：
+# CUDA 11.8: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
+# CUDA 12.1: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# CUDA 12.4: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+torch>=2.7.0
+torchaudio>=2.7.0
 openai-whisper>=20231117
 numpy>=1.24.3
 werkzeug==2.3.7
@@ -9,4 +13,4 @@ gevent>=23.9.1
 gevent-websocket>=0.10.1
 pathlib2>=2.3.7
 python-dotenv>=1.0.0
-pynvml>=11.5.0
+pynvml>=12.0.0

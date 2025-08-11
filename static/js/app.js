@@ -718,7 +718,7 @@ function fetchGpuMemoryInfo() {
                 if (data.gpu_info && data.gpu_info.available && data.gpu_info.gpus) {
                     for (const [gpuId, gpuData] of Object.entries(data.gpu_info.gpus)) {
                         gpuMemoryInfo.gpu_memory[gpuId] = {
-                            used: gpuData.reserved * 1024, // 转换为MB
+                            used: gpuData.used * 1024,     // 使用实际使用的内存，转换为MB
                             total: gpuData.total * 1024,   // 转换为MB
                             free: gpuData.free * 1024,     // 转换为MB
                             gpu_utilization: gpuData.gpu_utilization,

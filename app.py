@@ -258,10 +258,14 @@ def get_gpu_memory_info(gpu_id=None):
         
         for gid in gpu_list:
             props = torch.cuda.get_device_properties(gid)
-            total_memory = props.total_memory / 1024**3  # GB
-            allocated = torch.cuda.memory_allocated(gid) / 1024**3  # GB
-            reserved = torch.cuda.memory_reserved(gid) / 1024**3  # GB
-            free_memory = total_memory - reserved
+            torch_total_memory = props.total_memory / 1024**3  # GB
+            torch_allocated = torch.cuda.memory_allocated(gid) / 1024**3  # GB
+            torch_reserved = torch.cuda.memory_reserved(gid) / 1024**3  # GB
+            
+            # 默认使用torch的内存信息
+            total_memory = torch_total_memory
+            used_memory = torch_reserved
+            free_memory = total_memory - used_memory
             
             # 获取GPU使用率信息
             gpu_utilization = None
@@ -271,6 +275,13 @@ def get_gpu_memory_info(gpu_id=None):
             if nvml_initialized:
                 try:
                     handle = pynvml.nvmlDeviceGetHandleByIndex(gid)
+                    
+                    # 获取真实的GPU内存使用情况
+                    mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                    total_memory = mem_info.total / 1024**3  # GB
+                    used_memory = mem_info.used / 1024**3  # GB
+                    free_memory = mem_info.free / 1024**3  # GB
+                    
                     # 获取GPU使用率
                     utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
                     gpu_utilization = utilization.gpu
@@ -284,13 +295,18 @@ def get_gpu_memory_info(gpu_id=None):
                         
                 except Exception as e:
                     log_message('warning', f"获取GPU {gid} 使用率失败: {e}")
+                    # 如果pynvml失败，回退到torch的内存信息
+                    total_memory = torch_total_memory
+                    used_memory = torch_reserved
+                    free_memory = total_memory - used_memory
             
             gpu_info[gid] = {
                 "total": total_memory,
-                "allocated": allocated,
-                "reserved": reserved,
-                "free": free_memory,
-                "usage_percent": (reserved / total_memory) * 100,
+                "allocated": torch_allocated,  # 保留torch分配的内存信息
+                "reserved": torch_reserved,    # 保留torch保留的内存信息
+                "used": used_memory,           # 实际使用的内存（来自pynvml）
+                "free": free_memory,           # 实际可用的内存（来自pynvml）
+                "usage_percent": (used_memory / total_memory) * 100,
                 "gpu_utilization": gpu_utilization,
                 "memory_utilization": memory_utilization,
                 "temperature": temperature
